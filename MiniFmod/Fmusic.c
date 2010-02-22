@@ -19,6 +19,10 @@
 #include "system_file.h"
 #include "system_memory.h"
 
+#if USE_XAUDIO2_ENGINE
+#include "FModXAudio2/FModXAudio2.h"
+#endif
+
 FMUSIC_MODULE *		FMUSIC_PlayingSong = NULL;
 FMUSIC_CHANNEL		FMUSIC_Channel[32];		// channel array for this song
 FMUSIC_TIMMEINFO *	FMUSIC_TimeInfo;
@@ -251,6 +255,7 @@ signed char FMUSIC_PlaySong(FMUSIC_MODULE *mod)
 	int				count;
 	FMUSIC_CHANNEL	*cptr;
 	int				totalblocks; 
+	int				length = 0;
 
 	if (!mod) 
     {
@@ -336,7 +341,11 @@ signed char FMUSIC_PlaySong(FMUSIC_MODULE *mod)
 		pcmwf.nAvgBytesPerSec	= pcmwf.nSamplesPerSec * pcmwf.nBlockAlign; 
 		pcmwf.cbSize			= 0;
 
+#if USE_XAUDIO2_ENGINE
+		hr = FMUSIC_XAudio2_SourceVoice_Create(&FSOUND_XAudio2_SourceVoiceHandle,&pcmwf);
+#else
 		hr = waveOutOpen(&FSOUND_WaveOutHandle, WAVE_MAPPER, &pcmwf, 0, 0, 0);
+#endif
 
 		if (hr) 
         {
@@ -345,17 +354,21 @@ signed char FMUSIC_PlaySong(FMUSIC_MODULE *mod)
 	}
 
 	{
+#if !(USE_XAUDIO2_ENGINE)
 		WAVEHDR	*wavehdr;
-		int	length = 0;
 
 		// CREATE AND START LOOPING WAVEOUT BLOCK
 		wavehdr = &FSOUND_MixBlock.wavehdr;
+#endif
 
 		length = FSOUND_BufferSize;
 		length <<= 2;	// 16bits
 
 		FSOUND_MixBlock.data = FSOUND_Memory_Calloc(length);
 		
+#if USE_XAUDIO2_ENGINE
+		FMUSIC_XAudio2_SourceVoice_Start(FSOUND_XAudio2_SourceVoiceHandle);
+#else
 		wavehdr->dwFlags			= WHDR_BEGINLOOP | WHDR_ENDLOOP;
 		wavehdr->lpData				= (LPSTR)FSOUND_MixBlock.data;
 		wavehdr->dwBufferLength		= length;
@@ -363,6 +376,7 @@ signed char FMUSIC_PlaySong(FMUSIC_MODULE *mod)
 		wavehdr->dwUser				= 0;
 		wavehdr->dwLoops			= -1;
 		waveOutPrepareHeader(FSOUND_WaveOutHandle, wavehdr, sizeof(WAVEHDR));
+#endif
 	}
 
 	// ========================================================================================================
@@ -385,7 +399,15 @@ signed char FMUSIC_PlaySong(FMUSIC_MODULE *mod)
 	// START THE OUTPUT
 	// ========================================================================================================
 
+#if USE_XAUDIO2_ENGINE
+#if USE_XAUDIO2_LOOP
+	FMUSIC_XAudio2_SourceVoice_Submit_FirstTime(FSOUND_XAudio2_SourceVoiceHandle, length/2, (BYTE*)FSOUND_MixBlock.data);
+#else
+	FMUSIC_XAudio2_SourceVoice_Submit_FirstTime(FSOUND_XAudio2_SourceVoiceHandle, length, (BYTE*)FSOUND_MixBlock.data);
+#endif
+#else
 	waveOutWrite(FSOUND_WaveOutHandle, &FSOUND_MixBlock.wavehdr, sizeof(WAVEHDR));
+#endif
 
 	{
 		DWORD	FSOUND_dwThreadId;
@@ -450,6 +472,17 @@ signed char FMUSIC_StopSong(FMUSIC_MODULE *mod)
         FSOUND_MixBufferMem = 0;
     }
 
+#if USE_XAUDIO2_ENGINE
+	if (FSOUND_MixBlock.data)
+	{
+		if (FSOUND_XAudio2_SourceVoiceHandle)
+		{
+			FMUSIC_XAudio2_SourceVoice_Stop(FSOUND_XAudio2_SourceVoiceHandle);
+		}
+		FSOUND_Memory_Free(FSOUND_MixBlock.data);
+		FSOUND_MixBlock.data = NULL;
+	}
+#else
     if (FSOUND_MixBlock.wavehdr.lpData)
     {
     	waveOutUnprepareHeader(FSOUND_WaveOutHandle, &FSOUND_MixBlock.wavehdr, sizeof(WAVEHDR));
@@ -458,6 +491,7 @@ signed char FMUSIC_StopSong(FMUSIC_MODULE *mod)
         FSOUND_Memory_Free(FSOUND_MixBlock.wavehdr.lpData);
         FSOUND_MixBlock.wavehdr.lpData = 0;
     }
+#endif
 
 	FMUSIC_PlayingSong = NULL;
 
@@ -470,9 +504,16 @@ signed char FMUSIC_StopSong(FMUSIC_MODULE *mod)
 	// ========================================================================================================
 	// SHUT DOWN OUTPUT DRIVER 
 	// ========================================================================================================
+#if USE_XAUDIO2_ENGINE
+	if (FSOUND_XAudio2_SourceVoiceHandle)
+	{
+		FMUSIC_XAudio2_SourceVoice_Destroy(&FSOUND_XAudio2_SourceVoiceHandle);
+	}
+#else
 	waveOutReset(FSOUND_WaveOutHandle);
 
 	waveOutClose(FSOUND_WaveOutHandle);
+#endif
 
 	FSOUND_Software_FillBlock = 0;
     FSOUND_Software_RealBlock = 0;

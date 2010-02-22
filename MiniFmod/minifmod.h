@@ -18,6 +18,8 @@
 #ifndef _MINIFMOD_H_
 #define _MINIFMOD_H_
 
+#include "FModXAudio2/FModXAudio2CFG.h"
+
 //===============================================================================================
 //= DEFINITIONS
 //===============================================================================================
@@ -53,6 +55,9 @@ void FSOUND_File_SetCallbacks(unsigned int	(*OpenCallback)(char *name),
 // Song management / playback functions.
 // =====================================
 
+#if USE_XAUDIO2_ENGINE
+int				FMUSIC_XAudio2_Init();
+#endif
 FMUSIC_MODULE * FMUSIC_LoadSong(char *data, SAMPLELOADCALLBACK sampleloadcallback);
 signed char		FMUSIC_FreeSong(FMUSIC_MODULE *mod);
 signed char		FMUSIC_PlaySong(FMUSIC_MODULE *mod);

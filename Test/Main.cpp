@@ -19,7 +19,7 @@
 #define USEFMOD TRUE
 
 #ifdef USEFMOD
-	#include "../minifmod/minifmod.h"
+	#include "../MiniFmod/minifmod.h"
 #endif
 
 
@@ -199,6 +199,11 @@ void main(int argc, char *argv[])
 
 #ifdef USEFMOD
 
+#if USE_XAUDIO2_ENGINE
+	// Init FMod XAudio2 Driver
+	FMUSIC_XAudio2_Init();
+#endif
+
 	// ==========================================================================================
 	// LOAD SONG
 	// ==========================================================================================
@@ -216,7 +221,7 @@ void main(int argc, char *argv[])
 
 #endif
 
-	printf("Press any key to quit\n");
+	printf("Press Esc key to quit\n");
 	printf("=========================================================================\n");
 	printf("Playing song...\n");
 
@@ -239,7 +244,7 @@ void main(int argc, char *argv[])
 
 			printf("ord %2d row %2d seconds %5.02f %s      \r", ord, row, mytime, (row % 8 ? "    " : "TICK"));
 
-		} while (key != 27);
+		} while (key != VK_ESCAPE);
 	}
 
 

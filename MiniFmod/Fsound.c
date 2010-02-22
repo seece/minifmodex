@@ -22,6 +22,10 @@
 #include <windows.h>
 #include <mmsystem.h>
 
+#if USE_XAUDIO2_ENGINE
+	#include "FModXAudio2/FModXAudio2.h"
+#endif
+
 //= GLOBALS ================================================================================
 
 FSOUND_CHANNEL		FSOUND_Channel[256];             // channel pool 
@@ -165,6 +169,60 @@ DWORD FSOUND_Software_DoubleBufferThread(LPDWORD lpdwParam)
 
 	while (!FSOUND_Software_Exit)
 	{
+#if USE_XAUDIO2_ENGINE
+		UINT64 uSamplePlayed = 0;
+
+#if !(USE_XAUDIO2_LOOP)
+		int    nLocalFillCount = 0;
+		BOOL   isBufferEnd     = isBufferEnd = FMUSIC_XAudio2_SourceVoice_CheckBufferEndEvent(FSOUND_XAudio2_SourceVoiceHandle,&uSamplePlayed);
+		uSamplePlayed %= FSOUND_BufferSize;
+		uSamplePlayed  = uSamplePlayed/FSOUND_BlockSize;
+
+		FSOUND_Software_RealBlock = uSamplePlayed;
+
+		if (isBufferEnd)
+		{
+			if (nLocalFillCount == 0)
+			{
+				do
+				{
+					FSOUND_Software_UpdateMutex = TRUE;
+
+					FSOUND_Software_Fill();
+
+					nLocalFillCount++;
+					if (nLocalFillCount >= totalblocks)
+					{
+						nLocalFillCount = 0;
+					}
+					FSOUND_Software_UpdateMutex = FALSE;
+				}
+				while (nLocalFillCount > 0);
+				FMUSIC_XAudio2_SourceVoice_Submit_Again(FSOUND_XAudio2_SourceVoiceHandle);
+			}
+		}
+#else
+		FMUSIC_XAudio2_SourceVoice_GetSamplesPlayed(FSOUND_XAudio2_SourceVoiceHandle,&uSamplePlayed);
+		uSamplePlayed %= FSOUND_BufferSize;
+		uSamplePlayed  = uSamplePlayed/FSOUND_BlockSize;
+
+		while (FSOUND_Software_FillBlock != uSamplePlayed)
+		{
+			FSOUND_Software_UpdateMutex = TRUE;
+
+			FSOUND_Software_Fill();
+
+			FSOUND_Software_RealBlock++;
+			if (FSOUND_Software_RealBlock >= totalblocks)
+			{
+				FSOUND_Software_RealBlock = 0;
+			}
+
+			FSOUND_Software_UpdateMutex = FALSE;
+		}
+#endif //#if !(USE_XAUDIO2_LOOP)
+
+#else
 		int		cursorpos,cursorblock,prevblock;
 		MMTIME	mmt;
 
@@ -196,6 +254,7 @@ DWORD FSOUND_Software_DoubleBufferThread(LPDWORD lpdwParam)
 
 			FSOUND_Software_UpdateMutex = FALSE;
 		}
+#endif
 
 		Sleep(5);
 	};
