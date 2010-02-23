@@ -822,7 +822,7 @@ MixLoopStart16:
 	}
 } 
 
-#if 1
+#if 0
 void FSOUND_Mixer_FPU_Ramp_C(void *mixptr, int len, char returnaddress)
 {
 	FSOUND_CHANNEL* _pChannel; // ecx@5
@@ -832,20 +832,18 @@ void FSOUND_Mixer_FPU_Ramp_C(void *mixptr, int len, char returnaddress)
 	unsigned int _uMixPos; // esi@8
 	int _uLoopEndPos; // edx@9
 	unsigned __int64 _u64_MixSampleLeft; // qax@11
-	unsigned __int64 v8; // qax@14
 	unsigned int _uChSpeedHi; // ebp@14
 	unsigned int _uChSpeedLo; // edi@14
 	unsigned int v11; // eax@17
 	unsigned int _ch_speedhi; // ecx@32
 	unsigned int _ch_speedlo; // ebx@32
 	unsigned int _ch_mixposlo; // ebp@32
-    unsigned int _ch_mixpos;
+    unsigned int _ch_mixpos; // esi
     unsigned int _dest_mixbuffptr;
 	unsigned int _LOL_mix_count; // edx@34
 	int v22; // esi@45
 	int v23; // eax@46
 	char v24; // dl@50
-	unsigned int v26; // eax@11
 	unsigned __int64 v29; // qt2@17
 	unsigned int v31; // eax@25
 	unsigned int v32; // edx@25
