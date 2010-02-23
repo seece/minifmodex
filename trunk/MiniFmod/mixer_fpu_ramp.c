@@ -860,7 +860,6 @@ void FSOUND_Mixer_FPU_Ramp_C(void *mixptr, int len, char returnaddress)
 	int v37; // ebp@36
 	int v39; // ebp@36
 	unsigned __int8 v40; // cf@36
-	int v41; // ebp@37
 	int v43; // ebp@37
 	unsigned __int8 v44; // cf@37
 	int v45; // ebp@43
@@ -1061,8 +1060,8 @@ void FSOUND_Mixer_FPU_Ramp_C(void *mixptr, int len, char returnaddress)
 						{
 #ifdef ROLLED
                             if (0)
-                            {
 #endif
+                            {
 							    _LOL_mix_count >>= 1;
 							    if ( _LOL_mix_count )           // ELSE skip this block// no groups of 2 samples to mix!
 							    {
@@ -1161,58 +1160,72 @@ void FSOUND_Mixer_FPU_Ramp_C(void *mixptr, int len, char returnaddress)
 									    if ( !_LOL_mix_count )
 										    break;
 //MixLoopUnroll16:
-									    v41 = _ch_mixposlo >> 1;
-									    mix_temp1 = v41;
+									    _ch_mixposlo >>= 1;
+									    mix_temp1 = _ch_mixposlo;
 									    __asm
 									    {
-										    fild    word ptr [esi+esi+2]
-										    fild    word ptr [esi+esi]
-										    fild    mix_temp1
+                                            fild	word ptr [esi+esi+2]	// 1 [0]samp1+1 [1]finalR2 [2]finalR1 [3]finalL2
+                                            fild	word ptr [esi+esi]		// 1 [0]samp1 [1]samp1+1 [2]finalR2 [3]finalR1 [4]finalL2
+                                            fild	dword ptr mix_temp1		// 1 [0]ifrac1 [1]samp1 [2]samp1+1 [3]finalR2 [4]finalR1 [5]finalL2
 									    }
-									    v41 *= 2;
-									    _ch_mixpos = _ch_speedhi + __MKCADD__(_ch_speedlo, v41) + _ch_mixpos;
-									    _dest_mixbuffptr += 16;
-									    __asm { fmul    ds:mix_1over2gig }
-									    v43 = (unsigned int)(_ch_speedlo + v41) >> 1;
-									    mix_temp1 = v43;
+									    _ch_mixposlo += _ch_mixposlo;
+
+                                        _ch_mixpos += _ch_speedhi;
+                                        if (((unsigned int)(_ch_mixposlo+_ch_speedlo))<_ch_mixposlo)
+                                        {
+                                            _ch_mixpos += 1;
+                                        }
+                                        _ch_mixposlo += _ch_mixposlo;
+
+                                        _dest_mixbuffptr += 16;
+									    __asm
+                                        {
+                                            fmul	mix_1over2gig			// 1 [0]ffrac1 [1]samp1 [2]samp1+1 [3]finalR2 [4]finalR1 [5]finalL2
+                                        }
+									    _ch_mixposlo >>= 1;
+									    mix_temp1 = _ch_mixposlo;
 									    __asm
 									    {
-										    fild    mix_temp1
-										    fild    word ptr [esi+esi+2]
-										    fxch    st(4)
-										    fsub    st, st(3)
+                                            fild	dword ptr mix_temp1		// 1 [0]ifrac2 [1]ffrac1 [2]samp1 [3]samp1+1 [4]finalR2 [5]finalR1 [6]finalL2
+                                            fild	word ptr [esi+esi+2]	// 1 [0]samp2+1 [1]ifrac2 [2]ffrac1 [3]samp1 [4]samp1+1 [5]finalR2 [6]finalR1 [7]finalL2
+                                            fxch	st(4)					//   [0]samp1+1 [1]ifrac2 [2]ffrac1 [3]samp1 [4]samp2+1 [5]finalR2 [6]finalR1 [7]finalL2
+                                            fsub	st(0), st(3)			// 1 [0]delta1 [1]ifrac2 [2]ffrac1 [3]samp1 [4]samp2+1 [5]finalR2 [6]finalR1 [7]finalL2
+//                                          fnop							// 1 fsub stall
 									    }
-									    v43 *= 2;
+									    _ch_mixposlo *= 2;
 									    __asm
 									    {
-										    fmulp   st(2), st
-										    fild    word ptr [esi+esi]
-										    fxch    st(1)
-										    fmul    ds:mix_1over2gig
-										    fxch    st(4)
-										    fsub    st, st(1)
+                                            fmulp	st(2), st(0)			// 1 [0]ifrac2 [1]interp1 [2]samp1 [3]samp2+1 [4]finalR2 [5]finalR1 [6]finalL2
+                                            fild	word ptr [esi+esi]		// 1 [0]samp2 [1]ifrac2 [2]interp1 [3]samp1 [4]samp2+1 [5]finalR2 [6]finalR1 [7]finalL2
+                                            fxch	st(1)					//   [0]ifrac2 [1]samp2 [2]interp1 [3]samp1 [4]samp2+1 [5]finalR2 [6]finalR1 [7]finalL2
+                                            fmul	mix_1over2gig			// 1 [0]ffrac2 [1]samp2 [2]interp1 [3]samp1 [4]samp2+1 [5]finalR2 [6]finalR1 [7]finalL2
+                                            fxch	st(4)					//   [0]samp2+1 [1]samp2 [2]interp1 [3]samp1 [4]ffrac2 [5]finalR2 [6]finalR1 [7]finalL2
+                                            fsub	st(0), st(1)			// 1 [0]delta2 [1]samp2 [2]interp1 [3]samp1 [4]ffrac2 [5]finalR2 [6]finalR1 [7]finalL2
 									    }
-									    v44 = __MKCADD__(_ch_speedlo, v43);
-									    _ch_mixposlo = _ch_speedlo + v43;
-									    _ch_mixpos = _ch_speedhi + v44 + _ch_mixpos;
+                                        _ch_mixpos += _ch_speedhi;
+                                        if (((unsigned int)(_ch_mixposlo+_ch_speedlo))<_ch_mixposlo)
+                                        {
+                                            _ch_mixpos += 1;
+                                        }
+									    _ch_mixposlo += _ch_speedlo;
 									    __asm
 									    {
-										    fmulp   st(4), st
-										    fxch    st(2)
-										    faddp   st(1), st
-										    fxch    st(4)
-										    fstp    dword ptr [edi-1Ch]
-										    fxch    st(4)
-										    fstp    dword ptr [edi-18h]
-										    fld     st(2)
-										    fmul    mix_leftvol
-										    fxch    st(1)
-										    faddp   st(4), st
-										    fxch    st(1)
-										    fstp    dword ptr [edi-14h]
-										    fxch    st(1)
+                                            fmulp	st(4), st(0)			// 1 [0]samp2 [1]interp1 [2]samp1 [3]interp2 [4]finalR2 [5]finalR1 [6]finalL2
+                                            fxch	st(2)					//   [0]samp1 [1]interp1 [2]samp2 [3]interp2 [4]finalR2 [5]finalR1 [6]finalL2
+                                            faddp	st(1), st(0)			// 1 [0]newsamp1 [1]samp2 [2]interp2 [3]finalR2 [4]finalR1 [5]finalL2
+                                            fxch	st(4)					//	 [0]finalR1 [1]samp2 [2]interp2 [3]finalR2 [4]newsamp1 [5]finalL2
+                                            fstp	dword ptr [edi-28]		// 2 [0]samp2 [1]interp2 [2]finalR2 [3]newsamp1 [4]finalL2
+                                            fxch	st(4)					// 1 [0]finalL2 [1]interp2 [2]finalR2 [3]newsamp1 [4]samp2
+                                            fstp	dword ptr [edi-24]		// 2 [0]interp2 [1]finalR2 [2]newsamp1 [3]samp2
+                                            fld		st(2)					// 1 [0]newsamp1 [1]interp2 [2]finalR2 [3]newsamp1 [4]samp2
+                                            fmul	mix_leftvol				// 1 [0]newsampL1 [1]interp2 [2]finalR2 [3]newsamp1 [4]samp2
+                                            fxch	st(1)					//   [0]interp2 [1]newsampL1 [2]finalR2 [3]newsamp1 [4]samp2
+                                            faddp	st(4), st(0)			// 1 [0]newsampL1 [1]finalR2 [2]newsamp1 [3]newsamp2
+                                            fxch	st(1)					//   [0]finalR2 [1]newsampL1 [2]newsamp1 [3]newsamp2
+                                            fstp	dword ptr [edi-20]		// 2 [0]newsampL1 [1]newsamp1 [2]newsamp2
+                                            fxch	st(1)					// 1 [0]newsamp1 [1]newsampL1 [2]newsamp2 
 									    }
-								    }
+								    } //while ( 1 )
 
                                     __asm
 								    {
@@ -1222,10 +1235,8 @@ void FSOUND_Mixer_FPU_Ramp_C(void *mixptr, int len, char returnaddress)
                                         fstp	dword ptr [edi-8]		// 2 [0]finalR2
                                         fstp	dword ptr [edi-4]		// 2 
 								    }
-							    }
-#ifdef ROLLED
+							    } //if ( _LOL_mix_count )
                             }
-#endif
                             //= MIX 16BIT, ROLLED ==================================================================
 //MixLoopStart16:
                             _LOL_mix_count = mix_count;
@@ -1255,74 +1266,85 @@ void FSOUND_Mixer_FPU_Ramp_C(void *mixptr, int len, char returnaddress)
 							}
 							do
 							{
-								v45 = _ch_mixposlo >> 1;
+//MixLoop16:
+                                _ch_mixposlo >>= 1;                 // 1 make 31bit coz fpu only loads signed values
 								_dest_mixbuffptr += 8;
-								__asm { fild    word ptr [esi+esi+2] }
-								mix_temp1 = v45;
+								__asm
+                                {
+                                    fild	word ptr [esi+esi+2]	// 1 [0]samp1+1 [1]rvol [2]lvol [3]rampspeedR [4]rampspeedL
+                                }
+								mix_temp1 = _ch_mixposlo;
 								__asm
 								{
-									fild    word ptr [esi+esi]
-									fild    mix_temp1
+                                    fild	word ptr [esi+esi]		// 1 [0]samp1 [2]samp1+1 [3]rvol [4]lvol [5]rampspeedR [6]rampspeedL
+                                    fild	dword ptr mix_temp1		// 1 [0]ifrac [1]samp1 [2]samp1+1 [3]rvol [4]lvol [5]rampspeedR [6]rampspeedL
 								}
-								v45 *= 2;
-								v46 = __MKCADD__(_ch_speedlo, v45);
-								_ch_mixposlo = _ch_speedlo + v45;
-								_ch_mixpos += _ch_speedhi + v46;
+								_ch_mixposlo *= 2;                  // 1 restore mixpos low
+                                _ch_mixpos += _ch_speedhi;          // 1 add upper portion of speed plus carry	
+                                if (((unsigned int)(_ch_mixposlo+_ch_speedlo))<_ch_mixposlo)
+                                {
+                                    _ch_mixpos += 1;
+                                }
+                                _ch_mixposlo += _ch_speedlo;        //   add speed low to mixpos low
 								__asm
 								{
-									fmul    ds:mix_1over2gig
-										fxch    st(2)
-										fsub    st, st(1)
-										fnop
-										fnop
-										fnop
-										fmulp   st(2), st
-										fnop
-										fnop
-										fnop
-										fnop
-										faddp   st(1), st
-										fnop
-										fnop
-										fld     st
-										fmul    st, st(3)
-										fxch    st(3)
-										fadd    st, st(5)
-										fxch    st(1)
-										fmul    st, st(2)
-										fxch    st(2)
-										fadd    st, st(4)
-										fxch    st(3)
-										fnop
-										fnop
-										fadd    dword ptr [edi-8]
-									fxch    st(2)
-										fadd    dword ptr [edi-4]
-									fxch    st(2)
-										fnop
-										fstp    dword ptr [edi-8]
-									fxch    st(1)
-										fstp    dword ptr [edi-4]
-									fxch    st(1)
+                                    fmul	mix_1over2gig			// 1 [0]ifrac [1]samp1 [2]samp1+1 [3]rvol [4]lvol [5]rampspeedR [6]rampspeedL
+                                    fxch	st(2)					//   [0]samp1+1 [1]samp1 [2]ffrac [3]rvol [4]lvol [5]rampspeedR [6]rampspeedL
+                                    fsub	st(0), st(1)			// 1 [0]delta1 [1]samp1 [2]ffrac [3]rvol [4]lvol [5]rampspeedR [6]rampspeedL
+                                    fnop							// 1
+                                    fnop							// 1
+                                    fnop							// 1
+                                    fmulp	st(2), st(0)			// 1 [0]sample [1]interp [2]rvol [3]lvol [4]rampspeedR [5]rampspeedL
+                                    fnop							// 1
+                                    fnop							// 1
+                                    fnop							// 1
+                                    fnop							// 1
+                                    faddp	st(1), st(0)			// 1 [0]newsamp [1]rvol [2]lvol [3]rampspeedR [4]rampspeedL
+                                    fnop							// 1
+                                    fnop							// 1
+                                    fld		st(0)					// 1 [0]newsamp [1]newsamp [2]rvol [3]lvol [4]rampspeedR [5]rampspeedL
+                                    fmul	st(0), st(3)			// 1 [0]newsampL [1]newsamp [2]rvol [3]lvol [4]rampspeedR [5]rampspeedL
+                                    fxch	st(3)					//   [0]lvol [1]newsamp [2]rvol [3]newsampL [4]rampspeedR [5]rampspeedL
+                                    fadd	st(0), st(5)			// 1 [0]lvol [1]newsamp [2]rvol [3]newsampL [4]rampspeedR [5]rampspeedL
+                                    fxch	st(1)					//   [0]newsamp [1]lvol [2]rvol [3]newsampL [4]rampspeedR [5]rampspeedL
+                                    fmul	st(0), st(2)			// 1 [0]newsampR [1]lvol [2]rvol [3]newsampL [4]rampspeedR [5]rampspeedL
+                                    fxch	st(2)					//   [0]rvol [1]lvol [2]newsampR [3]newsampL [4]rampspeedR [5]rampspeedL
+                                    fadd	st(0), st(4)			// 1 [0]rvol [1]lvol [2]newsampR [3]newsampL [4]rampspeedR [5]rampspeedL
+                                    fxch	st(3)					//   [0]newsampL [1]lvol [2]newsampR [3]rvol [4]rampspeedR [5]rampspeedL
+                                    fnop							// 1
+                                    fnop							// 1
+                                    fadd	dword ptr [edi-8]		// 1 [0]finalL [1]lvol [2]newsampR [3]rvol [4]rampspeedR [5]rampspeedL
+                                    fxch	st(2)					//   [0]newsampR [1]lvol [2]finalL [3]rvol [4]rampspeedR [5]rampspeedL
+                                    fadd	dword ptr [edi-4]		// 1 [0]finalR [1]lvol [2]finalL [3]rvol [4]rampspeedR [5]rampspeedL
+                                    fxch	st(2)					//   [0]finalL [1]lvol [2]finalR [3]rvol [4]rampspeedR [5]rampspeedL
+                                    fnop							// 1
+                                    fstp	dword ptr [edi-8]		// 1 [0]lvol [1]finalR [2]rvol [3]rampspeedR [4]rampspeedL
+                                    fxch	st(1)					//   [0]finalR [1]lvol [2]rvol [3]rampspeedR [4]rampspeedL
+                                    fstp	dword ptr [edi-4]		// 3 [0]lvol [1]rvol [2]rampspeedR [3]rampspeedL
+                                    fxch	st(1)					//   [0]rvol [1]lvol [2]rampspeedR [3]rampspeedL
 								}
 								--_LOL_mix_count;
 							}
 							while ( _LOL_mix_count );
+
 							__asm
 							{
-								fxch    st(2)
-									fstp    mix_rampspeedright
-									fxch    st(2)
-									fstp    mix_rampspeedleft
-									fmul    ds:mix_255
-									fmul    ds:mix_256
-									fxch    st(1)
-									fmul    ds:mix_255
-									fmul    ds:mix_256
-									fistp   mix_rampleftvol
-									fistp   mix_ramprightvol
+                                fxch	st(2)					// [0]rampspeedR [1]lvol [2]rvol [3]rampspeedL
+                                fstp	mix_rampspeedright		// [0]lvol [1]rvol [2]rampspeedL
+                                fxch	st(2)					// [0]rampspeedL [1]rvol [2]lvol
+                                fstp	mix_rampspeedleft		// [0]rvol [1]lvol
+
+                                fmul	mix_255					// [0]rvol*255 [1]lvol
+                                fmul	mix_256					// [0]rvol*255*256 [1]lvol
+                                fxch	st(1)					// [0]lvol [1]rvol*255*256
+                                fmul	mix_255					// [0]lvol*255 [1]rvol*255*256
+                                fmul	mix_256					// [0]lvol*255*256 [1]rvol*255*256
+
+                                fistp	mix_rampleftvol			// [0]rvol*255*256
+                                fistp	mix_ramprightvol		// 
 							}
 						}
+// MixLoopEnd16:
 						v22 = _ch_mixpos - ((unsigned int)mix_samplebuff >> 1);
 						if ( !mix_rampcount )
 							break;
