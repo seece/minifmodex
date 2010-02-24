@@ -823,14 +823,16 @@ MixLoopStart16:
 } 
 
 #if 0
+
+#define _DWORD long
+
 void FSOUND_Mixer_FPU_Ramp_C(void *mixptr, int len, char returnaddress)
 {
 	FSOUND_CHANNEL* _pChannel; // ecx@5
-	int v2; // ST00_4@5
 	FSOUND_SAMPLE* _pSample; // ebx@6
 	unsigned int _uSamplesLeft; // eax@7
 	unsigned int _uMixPos; // esi@8
-	int _uLoopEndPos; // edx@9
+	unsigned int _uLoopEndPos; // edx@9
 	unsigned __int64 _u64_MixSampleLeft; // qax@11
 	unsigned int _uChSpeedHi; // ebp@14
 	unsigned int _uChSpeedLo; // edi@14
@@ -841,15 +843,13 @@ void FSOUND_Mixer_FPU_Ramp_C(void *mixptr, int len, char returnaddress)
     unsigned int _ch_mixpos; // esi
     unsigned int _dest_mixbuffptr;
 	unsigned int _LOL_mix_count; // edx@34
-	int v22; // esi@45
-	int v23; // eax@46
-	char v24; // dl@50
+	unsigned int v22; // esi@45
+	unsigned char v24; // dl@50
 	unsigned __int64 v29; // qt2@17
 	unsigned int v31; // eax@25
 	unsigned int v32; // edx@25
-	int v33; // eax@27
-	int v34; // edx@27
-	int v47; // edx@46
+	unsigned int v33; // eax@27
+	unsigned int v34; // edx@27
 	int v48; // esi@56
 	int v49; // esi@58
 	int v50; // ebp@58
@@ -870,14 +870,13 @@ void FSOUND_Mixer_FPU_Ramp_C(void *mixptr, int len, char returnaddress)
         //==============================================================================================
 		for (count = 0; count<64; count++)
 		{
-	Label_ForLoop:
+//Label_ForLoop:
 			cptr = &FSOUND_Channel[count];
 
-			v2 = a1;
 			mix_mixbuffptr = mix_mixptr;
 
 			_pChannel = cptr;
-			mix_cptr = _pChannel;
+			mix_cptr = (unsigned int)_pChannel;
 
             if (!cptr)                          // if (!cptr) ...
             {
@@ -885,13 +884,13 @@ void FSOUND_Mixer_FPU_Ramp_C(void *mixptr, int len, char returnaddress)
             }
 
             _pSample = _pChannel->sptr;         // load the correct SAMPLE  pointer for this channel
-            mix_sptr = _pSample;                // store sample pointer away
+            mix_sptr = (unsigned int)_pSample;  // store sample pointer away
             if (!_pSample)                      // if (!sptr) ...
             {
 	            goto MixExit;                   //			  ... then skip this channel!
             }
 
-			mix_samplebuff = _pSample->buff;
+			mix_samplebuff = (unsigned int)_pSample->buff;
 
             //==============================================================================================
             // LOOP THROUGH CHANNELS
@@ -1406,91 +1405,132 @@ void FSOUND_Mixer_FPU_Ramp_C(void *mixptr, int len, char returnaddress)
 						}
 // MixLoopEnd16:
 						v22 = _ch_mixpos - ((unsigned int)mix_samplebuff >> 1);
+
+#ifdef VOLUMERAMPING
+                        //=============================================================================================
+                        // DID A VOLUME RAMP JUST HAPPEN
+                        //=============================================================================================
 						if ( !mix_rampcount )
-							break;
-						_pSample = mix_sptr;
-						_pChannel = mix_cptr;
-						*(_DWORD *)(mix_cptr + 68) = mix_rampleftvol;
-						*(_DWORD *)(mix_cptr + 72) = mix_ramprightvol;
-						v23 = mix_count;
-						v47 = mix_rampcount - mix_count;
-						mix_rampspeedleft = 0;
-						mix_rampspeedright = 0;
+                        {
+							break;                              // no, no ramp
+                        }
+
+						_pSample = mix_sptr;                    // load ebx with sample pointer
+						_pChannel = mix_cptr;                   // load ecx with channel pointer
+
+						_pChannel->ramp_leftvolume = mix_rampleftvol;
+						_pChannel->ramp_rightvolume = mix_ramprightvol;
+
+						mix_rampspeedleft = 0;                  // clear out volume ramp
+						mix_rampspeedright = 0;                 // clear out volume ramp
 						mix_rampcount -= mix_count;
-						*(_DWORD *)(mix_cptr + 84) = v47;
-						if ( v47 )
+						_pChannel->ramp_count = mix_rampcount - mix_count;
+
+                        // if rampcount now = 0, a ramp has FINISHED, so finish the rest of the mix
+						if (( mix_rampcount - mix_count ) != 0)
 							break;
-						*(_DWORD *)(mix_cptr + 76) = 0;
-						*(_DWORD *)(mix_cptr + 80) = 0;
-						*(_DWORD *)(mix_cptr + 68) = *(_DWORD *)(mix_cptr + 32) << 8;
-						*(_DWORD *)(mix_cptr + 72) = *(_DWORD *)(mix_cptr + 36) << 8;
-						if ( mix_count_old == v23 )
+
+                        // clear out the ramp speeds
+						_pChannel->ramp_leftspeed = 0;
+						_pChannel->ramp_rightspeed = 0;
+
+                        // clamp the 2 volumes together in case the speed wasnt accurate enough!
+						_pChannel->ramp_leftvolume = _pChannel->leftvolume << 8;
+						_pChannel->ramp_rightvolume = _pChannel->rightvolume << 8;
+
+                        // is it 0 because ramp ended only? or both ended together??
+                        // if sample ended together with ramp.. problems .. loop isnt handled
+
+                        if ( mix_count_old == mix_count )           // ramp and output mode ended together
 							break;
-						*(_DWORD *)(mix_cptr + 40) = v22;
-						*(_DWORD *)(mix_cptr + 44) = _ch_mixposlo;
-						_uSamplesLeft = (unsigned int)(mix_mixbuffend - _dest_mixbuffptr) >> 3;
-						mix_mixbuffptr = _dest_mixbuffptr;
+
+                        // start again and continue rest of mix
+						_pChannel->mixpos = v22;
+						_pChannel->mixposlo = _ch_mixposlo;
+
+						_uSamplesLeft = (unsigned int)(mix_mixbuffend - _dest_mixbuffptr) >> 3; // eax now holds # of samples left, go recalculate mix_count!!!
+						mix_mixbuffptr = _dest_mixbuffptr;          // update the new mixbuffer pointer
 					}
-					while ( _uSamplesLeft );
-					if ( !mix_endflag )
-						goto FinishUpChannel;
-					_pSample = mix_sptr;
-					_pChannel = mix_cptr;
-					v24 = *(_BYTE *)(mix_sptr + 29);
-					if ( !(v24 & 2) )
+					while ( _uSamplesLeft ); // (do/while) at Line 917:CalculateLoopCount
+//DoOutputbuffEnd:
+#endif
+					if ( mix_endflag == FSOUND_OUTPUTBUFF_END )
+						break; // goto FinishUpChannel;
+
+                    //=============================================================================================
+                    // SWITCH ON LOOP MODE TYPE
+                    //=============================================================================================
+                    _pSample = mix_sptr;                            // load ebx with sample pointer
+					_pChannel = mix_cptr;                           // load ecx with sample pointer
+
+					v24 = _pSample->loopmode;
+					if ( !(v24 & FSOUND_LOOP_NORMAL) )
 						break;
+
 					do
-					v22 -= *(_DWORD *)(mix_sptr + 12);
-					while ( v22 >= (unsigned int)(*(_DWORD *)(mix_sptr + 12) + *(_DWORD *)(mix_sptr + 8)) );
-					*(_DWORD *)(mix_cptr + 40) = v22;
-					*(_DWORD *)(mix_cptr + 44) = _ch_mixposlo;
-					_uSamplesLeft = (unsigned int)(mix_mixbuffend - _dest_mixbuffptr) >> 3;
-					mix_mixbuffptr = _dest_mixbuffptr;
-					if ( !_uSamplesLeft )
-						goto FinishUpChannel;
-				}
-				if ( !(v24 & 4) )
+                    {
+//rewindsample:
+					v22 -= _pSample->looplen;
+                    } while ( v22 >= (unsigned int)(_pSample->loopstart + _pSample->looplen) );
+
+					_pChannel->mixpos = v22;
+					_pChannel->mixposlo = _ch_mixposlo;
+					_uSamplesLeft = (unsigned int)(mix_mixbuffend - _dest_mixbuffptr) >> 3; // eax now holds # of samples left, go recalculate mix_count!!!
+					mix_mixbuffptr = _dest_mixbuffptr;                                      // update the new mixbuffer pointer
+
+                    if ( !_uSamplesLeft )
+						break; // goto FinishUpChannel;
+				}// while(1) (2nd level)
+//CheckBidiLoop:
+				if ( (v24 & FSOUND_LOOP_BIDI) != FALSE)
 				{
-					_ch_mixposlo = 0;
-					v22 = 0;
-					*(_DWORD *)(mix_cptr + 28) = 0;
-	FinishUpChannel:
-					*(_DWORD *)(mix_cptr + 44) = _ch_mixposlo;
-					*(_DWORD *)(mix_cptr + 40) = v22;
-	MixExit:
-					a1 = v2;
-					++count;
-					goto Label_ForLoop;
+                    if ( _pChannel->speeddir == FSOUND_MIXDIR_FORWARDS )
+                        goto BidiForward;
+
+BidiBackwards:
+                    v48 = _pSample->loopstart - 1 - ((_ch_mixposlo > 0xFFFFFFFF) + v22);
+                    _ch_mixposlo = 0xFFFFFFFF - _ch_mixposlo;
+                    v22 = _pSample->loopstart + v48;
+                    _pChannel->speeddir = FSOUND_MIXDIR_FORWARDS;
+                    if ( v22 < _pSample->loopstart + _pSample->looplen )
+                        goto BidiFinish;
+BidiForward:
+                    v49 = _pSample->loopstart + _pSample->looplen - ((_ch_mixposlo > 0) + v22);
+                    v50 = -_ch_mixposlo;
+                    v51 = __MKCADD__(-1, v50);
+                    _ch_mixposlo = v50 - 1;
+                    v22 = _pSample->loopstart + _pSample->looplen - 1 + v51 + v49;
+
+                    _pChannel->speeddir = FSOUND_MIXDIR_BACKWARDS;
+
+                    if (v22 < _pSample->loopstart)
+                        goto BidiBackwards;
+BidiFinish:
+                    _pChannel->mixpos = v22;
+                    _pChannel->mixposlo = _ch_mixposlo;
+
+                    _uSamplesLeft = (unsigned int)(mix_mixbuffend - _dest_mixbuffptr) >> 3; // eax now holds # of samples left, go recalculate mix_count!!!
+                    mix_mixbuffptr = _dest_mixbuffptr;                                      // update the new mixbuffer pointer
+                    if ( !_uSamplesLeft )
+                        break; // goto FinishUpChannel;
 				}
-				if ( ((FSOUND_CHANNEL *)mix_cptr)->speeddir == FSOUND_MIXDIR_FORWARDS )
-					goto BidiForward;
-				do
-				{
-					v48 = ((FSOUND_SAMPLE *)_pSample)->loopstart - 1 - ((_ch_mixposlo > 0xFFFFFFFF) + v22);
-					_ch_mixposlo = -1 - _ch_mixposlo;
-					v22 = ((FSOUND_SAMPLE *)_pSample)->loopstart + v48;
-					*(_DWORD *)(_pChannel + 56) = 1;
-					if ( v22 < *(_DWORD *)(_pSample + 12) + *(_DWORD *)(_pSample + 8) )
-						break;
-	BidiForward:
-					v49 = *(_DWORD *)(_pSample + 12) + *(_DWORD *)(_pSample + 8) - ((_ch_mixposlo > 0) + v22);
-					v50 = -_ch_mixposlo;
-					v51 = __MKCADD__(-1, v50);
-					_ch_mixposlo = v50 - 1;
-					v22 = *(_DWORD *)(_pSample + 12) + *(_DWORD *)(_pSample + 8) - 1 + v51 + v49;
-					*(_DWORD *)(_pChannel + 56) = 2;
-				}
-				while ( v22 < *(_DWORD *)(_pSample + 8) );
-				*(_DWORD *)(_pChannel + 40) = v22;
-				*(_DWORD *)(_pChannel + 44) = _ch_mixposlo;
-				_uSamplesLeft = (unsigned int)(mix_mixbuffend - _dest_mixbuffptr) >> 3;
-				mix_mixbuffptr = _dest_mixbuffptr;
-				if ( !_uSamplesLeft )
-					goto FinishUpChannel;
-			}
-		} // for ??? //程序结构变了，for不应该在这里结束
+                else
+                {
+//NoLoop:
+                    _ch_mixposlo = 0;
+                    v22 = 0;
+                    _pChannel->sptr = NULL;
+                    break;
+                }
+			} // while(1) (1st level)
+            //= LEAVE INNER LOOP
+//FinishUpChannel:
+            _pChannel->mixposlo = _ch_mixposlo;
+            _pChannel->mixpos = v22;
+MixExit:
+            continue;
+		} // for (count = 0; count<64; count++)
 	} // if len>0
-	return j__RTC_CheckEsp();
 }
 
 #endif
