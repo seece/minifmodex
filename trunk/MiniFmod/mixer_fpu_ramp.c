@@ -1003,6 +1003,7 @@ void FSOUND_Mixer_FPU_Ramp_C(void *mixptr, int len, char returnaddress)
 							if (( v31 - v32 ) != 0)
 							{
 								mix_temp1 = v31 - v32;
+/**
 								__asm
 								{
 									fild    mix_temp1
@@ -1010,6 +1011,8 @@ void FSOUND_Mixer_FPU_Ramp_C(void *mixptr, int len, char returnaddress)
 									fmul    mix_1overvolumerampsteps
 									fstp    mix_rampspeedleft
 								}
+*/
+								mix_rampspeedleft = mix_temp1 * mix_1over255 * mix_1overvolumerampsteps;
 								_pChannel->ramp_leftspeed = mix_rampspeedleft;
 								mix_rampcount = mix_volumerampsteps;
 							}
@@ -1021,6 +1024,7 @@ void FSOUND_Mixer_FPU_Ramp_C(void *mixptr, int len, char returnaddress)
 							if (( v33 - v34 ) != 0)
 							{
 								mix_temp1 = v33 - v34;
+/**
 								__asm
 								{
 									fild    mix_temp1
@@ -1028,6 +1032,8 @@ void FSOUND_Mixer_FPU_Ramp_C(void *mixptr, int len, char returnaddress)
 									fmul    mix_1overvolumerampsteps
 									fstp    mix_rampspeedright
 								}
+*/
+								mix_rampspeedright = mix_temp1 * mix_1over255 * mix_1overvolumerampsteps;
 								_pChannel->ramp_rightspeed = mix_rampspeedright;
 								mix_rampcount = mix_volumerampsteps;
 							}
@@ -1048,24 +1054,31 @@ void FSOUND_Mixer_FPU_Ramp_C(void *mixptr, int len, char returnaddress)
 
                         // right volume
 						mix_temp1 = _pChannel->rightvolume;
+/**
 						__asm
 						{
 							fild    mix_temp1
 							fmul    ds:mix_1over255
 							fstp    mix_rightvol
 						}
+*/
+						mix_rightvol = mix_temp1 * mix_1over255;
 
                         // left volume
 						mix_temp1 = _pChannel->leftvolume;
+/**
 						__asm
 						{
 							fild    mix_temp1
 							fmul    ds:mix_1over255
 							fstp    mix_leftvol
 						}
+*/
+						mix_leftvol = mix_temp1 * mix_1over255;
 
                         // right ramp volume
 						mix_temp1 = _pChannel->ramp_rightvolume;
+/**
 						__asm
 						{
 							fild    mix_temp1
@@ -1073,9 +1086,12 @@ void FSOUND_Mixer_FPU_Ramp_C(void *mixptr, int len, char returnaddress)
 							fmul    ds:mix_1over255
 							fstp    mix_ramprightvol
 						}
+*/
+						mix_ramprightvol = mix_temp1 * mix_1over256 * mix_1over255;
 
                         // left ramp volume
 						mix_temp1 = _pChannel->ramp_leftvolume;
+/**
 						__asm
 						{
 							fild    mix_temp1
@@ -1083,6 +1099,8 @@ void FSOUND_Mixer_FPU_Ramp_C(void *mixptr, int len, char returnaddress)
 							fmul    ds:mix_1over255
 							fstp    mix_rampleftvol
 						}
+*/
+						mix_rampleftvol = mix_temp1 * mix_1over256 * mix_1over255;
 
                         //= SET UP ALL OF THE REGISTERS HERE FOR THE INNER LOOP ====================================
                         // eax = ---
